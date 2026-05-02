@@ -24,6 +24,13 @@ The system is built as a single-pass streaming pipeline that prioritizes safety,
     *   *Tradeoff:* The LLM isn't used for "reasoning" about the numbers, ensuring mathematically correct metrics and eliminating hallucination risk.
 4. **Graceful Degradation (Market Data):** `yfinance` calls are cached with a 5-minute TTL. If the API fails, functions return `None` and the pipeline continues gracefully.
 5. **SSE by Default:** The entire API is designed around Server-Sent Events to support future streaming LLM responses, ensuring a low TTFB (Time to First Byte).
+6. **Session Persistence (In-Memory):** For this demonstration, session history is stored in an `asyncio.Lock()` protected in-memory dictionary. This avoids the overhead of setting up a Postgres container for the reviewer, ensuring the app runs immediately on `git clone` while safely handling concurrent HTTP requests.
+7. **Library Choices Justification:**
+    *   **FastAPI & Uvicorn:** Chosen for native async support, high performance, and ease of defining strict schemas.
+    *   **sse-starlette:** A lightweight, proven library for implementing Server-Sent Events cleanly in FastAPI.
+    *   **Pydantic:** For strict data validation at the API boundary and ensuring the `PortfolioHealthAgent` output matches the required schema perfectly.
+    *   **numpy & yfinance:** For fast, mathematically sound pure-computation portfolio analytics, completely eliminating LLM math hallucination.
+    *   **openai:** The official SDK is used for reliable structured JSON output parsing.
 
 ## Performance & Cost Measurement
 

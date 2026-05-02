@@ -14,6 +14,11 @@ from src.services.portfolio import (
     generate_observations,
     generate_empty_portfolio_observations,
 )
+from src.services.session import (
+    get_history,
+    add_turn,
+    clear_session,
+)
 
 __all__ = [
     "get_current_price",
@@ -27,4 +32,7 @@ __all__ = [
     "compute_benchmark_comparison",
     "generate_observations",
     "generate_empty_portfolio_observations",
+    "get_history",
+    "add_turn",
+    "clear_session",
 ]

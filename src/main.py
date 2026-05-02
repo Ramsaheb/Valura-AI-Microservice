@@ -2,9 +2,13 @@
 Valura AI Microservice Entry Point.
 """
 import logging
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.api.routes import router
+
+# Load environment variables first
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(

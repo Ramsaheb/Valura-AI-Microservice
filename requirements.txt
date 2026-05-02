@@ -15,6 +15,12 @@ pydantic>=2.7.0
 # --- LLM ---
 openai>=1.30.0             # OpenAI Python SDK — structured outputs, streaming
 
+# --- Market data ---
+yfinance>=0.2.40           # Live market data — prices, benchmarks, dividends, FX rates
+
+# --- Computation ---
+numpy>=1.26.0              # Portfolio math — weighted returns, concentration metrics
+
 # --- Utilities ---
 python-dotenv>=1.0.0
 
@@ -22,12 +28,3 @@ python-dotenv>=1.0.0
 pytest>=8.2.0
 pytest-asyncio>=0.23.0
 pytest-mock>=3.14.0
-
-# =============================================================================
-# Suggested additions (add only what you actually use):
-#   - yfinance              — easy market data (stretch alternative: an MCP server)
-#   - pandas / numpy        — if your portfolio math gets non-trivial
-#   - asyncpg / aiosqlite   — only if you persist sessions in a real DB
-#   - tenacity              — if you implement retry policies
-#   - cachetools            — if you implement the optional dedupe cache
-# =============================================================================

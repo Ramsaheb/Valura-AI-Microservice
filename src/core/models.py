@@ -167,7 +167,5 @@ class SSEEvent(BaseModel):
 
 class StubResponse(BaseModel):
     """Response from an unimplemented agent."""
-    intent: str
-    entities: dict[str, Any] = Field(default_factory=dict)
-    agent: str
-    message: str = "This agent is not implemented in this build."
+    status: str = "stub"
+    message: str = "This agent is under development. Returning safe fallback response."

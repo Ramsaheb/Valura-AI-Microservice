@@ -36,14 +36,5 @@ class StubAgent(BaseAgent):
         llm: Any = None,
     ) -> dict[str, Any]:
         """Return a structured 'not implemented' response."""
-        response = StubResponse(
-            intent=classifier_result.intent,
-            entities=classifier_result.entities,
-            agent=classifier_result.agent,
-            message=(
-                f"The '{classifier_result.agent}' agent is not implemented in this build. "
-                f"In production, this query would be handled by a specialist agent. "
-                f"Your query has been correctly classified and routed."
-            ),
-        )
+        response = StubResponse()
         return response.model_dump()

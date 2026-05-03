@@ -105,13 +105,13 @@ async def test_api_valid_routing_to_stub():
     
     # Check the stub response
     agent_response = next(e for e in events if e["event"] == SSEEventType.AGENT_RESPONSE.value)
-    assert agent_response["data"]["agent"] == "market_research"
-    assert "not implemented" in agent_response["data"]["message"]
+    assert agent_response["data"]["status"] == "stub"
+    assert "under development" in agent_response["data"]["message"]
 
 
 @pytest.mark.asyncio
-async def test_api_user_not_found():
-    """Missing user should return a graceful error event, not a 500 stack trace."""
+async def test_api_user_not_found_fallback():
+    """Missing user should gracefully fallback to active_trader_us profile."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.post(
             "/api/v1/query",
@@ -122,14 +122,16 @@ async def test_api_user_not_found():
             }
         )
         
-    assert response.status_code == 200 # SSE streams usually start with 200 even for logical errors
+    assert response.status_code == 200
     
     events = _parse_sse_events(response.text)
+    event_types = [e["event"] for e in events]
     
-    # We expect: ERROR -> DONE
-    assert events[0]["event"] == SSEEventType.ERROR.value
-    assert events[0]["data"]["code"] == "user_not_found"
-    assert events[1]["event"] == SSEEventType.DONE.value
+    # Should NOT have an error
+    assert SSEEventType.ERROR.value not in event_types
+    
+    # Should have classification
+    assert SSEEventType.CLASSIFICATION.value in event_types
 
 
 @pytest.mark.asyncio

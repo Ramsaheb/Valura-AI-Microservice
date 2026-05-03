@@ -130,3 +130,85 @@ async def test_api_user_not_found():
     assert events[0]["event"] == SSEEventType.ERROR.value
     assert events[0]["data"]["code"] == "user_not_found"
     assert events[1]["event"] == SSEEventType.DONE.value
+
+
+@pytest.mark.asyncio
+async def test_api_portfolio_health_full_pipeline(mocker):
+    """
+    Full pipeline test: portfolio health query goes through
+    safety → classifier → portfolio_health agent → SSE response.
+    Mocks yfinance to prevent network calls.
+    """
+    mocker.patch("src.services.market_data.get_current_price", return_value=150.0)
+    mocker.patch("src.services.market_data.get_benchmark_return", return_value=12.0)
+    mocker.patch("src.services.market_data.get_fx_rate", return_value=1.0)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        response = await ac.post(
+            "/api/v1/query",
+            json={
+                "query": "how is my portfolio doing?",
+                "user_id": "user_001_active_trader_us",
+                "session_id": "test_session_4"
+            }
+        )
+    
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
+    
+    events = _parse_sse_events(response.text)
+    event_types = [e["event"] for e in events]
+    
+    # Must have: CLASSIFICATION -> AGENT_RESPONSE -> DONE
+    assert SSEEventType.CLASSIFICATION.value in event_types
+    assert SSEEventType.AGENT_RESPONSE.value in event_types
+    assert SSEEventType.DONE.value in event_types
+    
+    # Classification should route to portfolio_health
+    classification = next(e for e in events if e["event"] == SSEEventType.CLASSIFICATION.value)
+    assert classification["data"]["agent"] == "portfolio_health"
+    
+    # Agent response should have the required structure
+    agent_resp = next(e for e in events if e["event"] == SSEEventType.AGENT_RESPONSE.value)
+    assert "concentration_risk" in agent_resp["data"]
+    assert "performance" in agent_resp["data"]
+    assert "benchmark_comparison" in agent_resp["data"]
+    assert "observations" in agent_resp["data"]
+    assert "disclaimer" in agent_resp["data"]
+    assert "not investment advice" in agent_resp["data"]["disclaimer"].lower()
+
+
+@pytest.mark.asyncio
+async def test_api_empty_portfolio_user():
+    """
+    user_004_empty has no positions. The API should return a BUILD-oriented
+    response with observations, not crash.
+    """
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        response = await ac.post(
+            "/api/v1/query",
+            json={
+                "query": "give me a health check",
+                "user_id": "user_004_empty",
+                "session_id": "test_session_5"
+            }
+        )
+    
+    assert response.status_code == 200
+    
+    events = _parse_sse_events(response.text)
+    event_types = [e["event"] for e in events]
+    
+    # Should NOT have an error
+    assert SSEEventType.ERROR.value not in event_types
+    
+    # Should have classification + agent response + done
+    assert SSEEventType.CLASSIFICATION.value in event_types
+    assert SSEEventType.AGENT_RESPONSE.value in event_types
+    assert SSEEventType.DONE.value in event_types
+    
+    # Agent response should have observations (BUILD-oriented)
+    agent_resp = next(e for e in events if e["event"] == SSEEventType.AGENT_RESPONSE.value)
+    assert len(agent_resp["data"]["observations"]) > 0
+    assert "disclaimer" in agent_resp["data"]
+

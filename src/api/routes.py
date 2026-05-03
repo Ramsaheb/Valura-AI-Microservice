@@ -8,9 +8,15 @@ Orchestrates the entire AI pipeline:
   4. Intent Classifier (if fail -> rule-based fallback)
   5. Router -> Agent Execution
   6. Return response via SSE stream
+
+Pipeline timeout: 30 seconds. This covers the full request lifecycle from
+classification through agent execution. Chosen because yfinance data fetches
+typically complete in <2s, and even a slow LLM call should finish in <10s.
+30s provides generous headroom while preventing indefinite hangs.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -35,6 +41,11 @@ from src.utils.streaming import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Pipeline timeout: 30 seconds covers classification + agent execution.
+# yfinance typically completes in <2s, LLM calls in <10s. 30s provides
+# generous headroom while preventing indefinite hangs from network issues.
+PIPELINE_TIMEOUT_SECONDS = 30
 
 # Dependency injection for LLM client
 # In production, this would be an OpenAIClient. For tests without a key,
@@ -64,6 +75,48 @@ def _load_user(user_id: str) -> dict[str, Any]:
         
     with open(fixture_path, "r") as f:
         return json.load(f)
+
+
+async def _run_pipeline(request: QueryRequest, llm: Any, user: dict, history: list):
+    """
+    Core pipeline logic: classify → route → execute agent.
+    Separated so it can be wrapped in asyncio.wait_for for timeout enforcement.
+
+    Returns a list of SSE events to yield.
+    """
+    events = []
+
+    # 4. Intent Classifier (LLM with rule-based fallback)
+    classifier_result = await classify(
+        query=request.query,
+        llm=llm,
+        history=history
+    )
+    events.append(classification_event(classifier_result))
+
+    # 5. Agent Routing
+    agent = route(classifier_result)
+    
+    # 6. Agent Execution & Streaming
+    import json as json_mod
+    full_response_parts = []
+    
+    async for chunk in agent.stream(user, request.query, classifier_result, llm):
+        if chunk.strip():
+            try:
+                parsed_chunk = json_mod.loads(chunk)
+                events.append(agent_response_event(parsed_chunk))
+            except json_mod.JSONDecodeError:
+                from src.utils.streaming import agent_chunk_event
+                events.append(agent_chunk_event(chunk))
+            full_response_parts.append(chunk)
+
+    # 7. Update Session History
+    if request.session_id and full_response_parts:
+        await add_turn(request.session_id, "user", request.query)
+        await add_turn(request.session_id, "assistant", "Agent returned structured response.")
+
+    return events
 
 
 @router.post("/query")
@@ -99,54 +152,29 @@ async def handle_query(request: QueryRequest, llm: Any = Depends(get_llm_client)
                 yield done_event()
                 return
 
-            # 4. Intent Classifier (LLM with rule-based fallback)
-            # The classify function handles its own fallback if the LLM fails
-            classifier_result = await classify(
-                query=request.query,
-                llm=llm,
-                history=history
-            )
-            yield classification_event(classifier_result)
-
-            # 5. Agent Routing
-            agent = route(classifier_result)
-            
-            # 6. Agent Execution & Streaming
-            # Here we let the agent stream its response. If the agent returns a 
-            # single structured dictionary, the base class stream() method will
-            # yield it as a single chunk.
-            import json as json_mod
-            full_response_parts = []
-            
+            # 4-7. Classification → Routing → Agent → Session update
+            # Wrapped in a timeout to prevent indefinite hangs
             try:
-                # Most agents in this assignment return structured JSON dicts
-                # rather than raw text chunks.
-                async for chunk in agent.stream(user, request.query, classifier_result, llm):
-                    # We send the raw chunk, the client parses it
-                    if chunk.strip():
-                        # Try to parse as JSON to see if it's a structured response
-                        try:
-                            parsed_chunk = json_mod.loads(chunk)
-                            yield agent_response_event(parsed_chunk)
-                        except json_mod.JSONDecodeError:
-                            # It's a text chunk (e.g. from an LLM stream)
-                            from src.utils.streaming import agent_chunk_event
-                            yield agent_chunk_event(chunk)
-                        
-                        full_response_parts.append(chunk)
-                        
+                pipeline_events = await asyncio.wait_for(
+                    _run_pipeline(request, llm, user, history),
+                    timeout=PIPELINE_TIMEOUT_SECONDS,
+                )
+                for event in pipeline_events:
+                    yield event
+            except asyncio.TimeoutError:
+                logger.error(f"Pipeline timed out after {PIPELINE_TIMEOUT_SECONDS}s")
+                yield error_event(
+                    f"Request timed out after {PIPELINE_TIMEOUT_SECONDS} seconds. "
+                    f"Please try again.",
+                    code="timeout",
+                )
+                yield done_event()
+                return
             except Exception as e:
-                logger.exception(f"Agent {agent.name} failed during execution")
+                logger.exception(f"Pipeline failed during execution")
                 yield error_event(f"Agent execution failed: {str(e)}")
                 yield done_event()
                 return
-
-            # 7. Update Session History
-            if request.session_id and full_response_parts:
-                await add_turn(request.session_id, "user", request.query)
-                # For structured JSON, we just store "Agent responded with structured data"
-                # to save context window space, or we could serialize it.
-                await add_turn(request.session_id, "assistant", "Agent returned structured response.")
 
             yield done_event()
 

@@ -4,7 +4,7 @@ The intelligence layer behind Valura's global wealth management platform. This m
 
 ## Submission Video
 
-> **Video walkthrough:** [INSERT_UNLISTED_YOUTUBE_URL_HERE]
+> **Video walkthrough:** https://drive.google.com/file/d/1GY3KqWqIzws6tfK5mxwQokKraF-b0eiV/view?usp=drive_link
 
 ---
 

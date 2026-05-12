@@ -1,3 +1,12 @@
+---
+title: PGAGI
+emoji: 🐳
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+---
+
 # Valura AI Microservice
 
 The intelligence layer behind Valura's global wealth management platform. This microservice acts as an AI co-investor for every user, designed specifically to help novice investors **BUILD, MONITOR, GROW,** and **PROTECT** their portfolios.

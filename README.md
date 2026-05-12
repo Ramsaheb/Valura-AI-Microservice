@@ -81,6 +81,32 @@ pip install -r requirements.txt
 uvicorn src.main:app --reload
 ```
 
+### Running With Docker (Local)
+
+```bash
+docker build -t valura-ai .
+docker run --rm -p 7860:7860 -e APP_ENV=test valura-ai
+```
+
+Open `http://127.0.0.1:7860`.
+
+### Deploy on Hugging Face Spaces (Docker)
+
+1. Create a new Space on Hugging Face and choose the **Docker** SDK.
+2. Set the Space visibility and name (e.g. `valura-ai-microservice`).
+3. Add environment variables if needed:
+    - `OPENAI_API_KEY` (optional)
+    - `OPENAI_MODEL` (optional)
+    - `APP_ENV=test` to force the mock LLM (no API key required)
+4. Push this repo to the Space:
+
+```bash
+git remote add hf https://huggingface.co/spaces/<your-username>/<your-space>
+git push hf main
+```
+
+Hugging Face Spaces uses the included Dockerfile and serves on port `7860`.
+
 The API will be available at `http://127.0.0.1:8000`. You can interact with the primary endpoint at `/api/v1/query`.
 
 ### Example Request

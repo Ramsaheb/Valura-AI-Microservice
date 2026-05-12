@@ -130,12 +130,14 @@ def _rule_based_classify(message: str) -> dict[str, Any]:
 
     # --- Portfolio health ---
     if _matches_any(lower, [
-        r"\bportfolio\s+(health|check|summary|review|doing|performance)",
+        r"\bportfolio\s+(health|check|summary|review|doing|performance|risk)\b",
+        r"\bportfolio\s+risk\b",
+        r"\brisk\s+summary\b",
         r"\bhow\s+is\s+my\s+portfolio\b",
         r"\bhealth\s+check\b",
         r"\bmy\s+portfolio\s+doing\b",
-        r"\b(am\s+i|is\s+my\s+portfolio)\s+(diversified|well\s+diversified|balanced)",
-        r"\bconcentration\s+risk\b",
+        r"\b(am\s+i|is\s+my\s+portfolio)\s+(diversified|well\s+diversified|balanced)\b",
+        r"\bconcentration\s+risks?\b",
         r"\bbeating\s+the\s+market\b",
         r"\breview\s+my\s+holdings\b",
         r"\bhow\s+is\s+my\s+portfolio\s+doing\s+and\b",

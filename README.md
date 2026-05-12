@@ -7,15 +7,25 @@ sdk: docker
 pinned: false
 ---
 
-# Valura AI Microservice
+## Overview
+**Valura AI Microservice** is a high-performance, intelligence-driven layer for a global wealth management platform. It serves as an AI co-investor, helping users **BUILD, MONITOR, GROW,** and **PROTECT** their investment portfolios through a conversational interface.
 
-The intelligence layer behind Valura's global wealth management platform. This microservice acts as an AI co-investor for every user, designed specifically to help novice investors **BUILD, MONITOR, GROW,** and **PROTECT** their portfolios.
+
+---
 
 ## Submission Video
 
 > **Video walkthrough:** https://drive.google.com/file/d/1GY3KqWqIzws6tfK5mxwQokKraF-b0eiV/view?usp=drive_link
 
 ---
+
+## 🎨 Built-in Intelligence Dashboard
+The microservice includes a premium, responsive dashboard served directly from the root URL.
+
+- **Real-time Streaming:** Watch the AI's thought process through raw SSE events.
+- **Premium Design:** Dark-mode interface with glassmorphism, "Space Grotesk" typography, and interactive sample queries.
+- **Developer Friendly:** Direct links to Swagger docs and health monitoring.
+
 
 ## Architecture & Pipeline
 
@@ -34,8 +44,8 @@ The system is built as a single-pass streaming pipeline that prioritizes safety,
 
 1. **Safety First (Regex over LLM):** The safety guard is implemented using compiled regex patterns matching *action intent* + *harmful topic*.
     *   *Tradeoff:* Slightly higher false-positive rate on edge cases (e.g., "I need to know earnings before the call" is blocked even if innocent), but guarantees deterministic, instant blocking with 0 network latency.
-2. **Rule-Based Fallback Classifier:** Instead of failing when the LLM is down (or when `OPENAI_API_KEY` is missing in CI), the classifier falls back to a custom rule engine.
-    *   *Tradeoff:* Less nuanced than an LLM, but guarantees the pipeline never crashes and passes the 85% routing accuracy threshold required for CI.
+2. **Rule-Based Intent Classifier:** A custom rule engine that determines the user's intent and extracts structured entities (tickers, amounts, etc.) with high accuracy.
+    *   *Tradeoff:* Guarantees the pipeline never crashes and passes the 85% routing accuracy threshold required for CI without external dependencies.
 3. **Pure Computation for Portfolio Health:** The portfolio health agent uses `numpy` and `yfinance` for math, rather than asking the LLM to calculate returns.
     *   *Tradeoff:* The LLM isn't used for "reasoning" about the numbers, ensuring mathematically correct metrics and eliminating hallucination risk.
 4. **Graceful Degradation (Market Data):** `yfinance` calls are cached with a 5-minute TTL. If the API fails, functions return `None` and the pipeline continues gracefully.
@@ -61,8 +71,7 @@ The system is built as a single-pass streaming pipeline that prioritizes safety,
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `OPENAI_API_KEY` | No | — | OpenAI API key. Without it, the system uses the rule-based fallback |
-| `OPENAI_MODEL` | No | `gpt-4o-mini` | Model to use. Set to `gpt-4.1` for evaluation |
+| `OPENAI_MODEL` | No | `gpt-4o-mini` | Model name (placeholder for future expansion) |
 | `APP_ENV` | No | `development` | Set to `test` to force MockLLM (for CI) |
 
 ## Getting Started
@@ -70,7 +79,6 @@ The system is built as a single-pass streaming pipeline that prioritizes safety,
 ### Prerequisites
 
 *   Python 3.11+
-*   *(Optional)* OpenAI API Key for full LLM classification capabilities.
 
 ### Installation
 
@@ -90,31 +98,26 @@ pip install -r requirements.txt
 uvicorn src.main:app --reload
 ```
 
-### Running With Docker (Local)
+### 🐋 Docker Integration
+The project is containerized using a secure, lightweight `python:3.11-slim` image. It runs as a non-root user (UID 1000) for maximum security.
 
+**Build & Run Locally:**
 ```bash
 docker build -t valura-ai .
 docker run --rm -p 7860:7860 -e APP_ENV=test valura-ai
 ```
 
-Open `http://127.0.0.1:7860`.
+### 🤗 Deploying to Hugging Face Spaces
+This microservice is optimized for Hugging Face Spaces (Docker SDK).
 
-### Deploy on Hugging Face Spaces (Docker)
+1. **Create a Space:** Choose the **Docker** SDK and set the visibility.
+2. **Deployment:**
+   ```bash
+   git remote add hf https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE_NAME
+   git push hf main
+   ```
+The service will automatically start on port `7860`.
 
-1. Create a new Space on Hugging Face and choose the **Docker** SDK.
-2. Set the Space visibility and name (e.g. `valura-ai-microservice`).
-3. Add environment variables if needed:
-    - `OPENAI_API_KEY` (optional)
-    - `OPENAI_MODEL` (optional)
-    - `APP_ENV=test` to force the mock LLM (no API key required)
-4. Push this repo to the Space:
-
-```bash
-git remote add hf https://huggingface.co/spaces/<your-username>/<your-space>
-git push hf main
-```
-
-Hugging Face Spaces uses the included Dockerfile and serves on port `7860`.
 
 The API will be available at `http://127.0.0.1:8000`. You can interact with the primary endpoint at `/api/v1/query`.
 
@@ -158,13 +161,4 @@ The test suite implements the matching rules from `fixtures/README.md`:
 3. **LLM-generated observations:** Use the LLM to produce richer, more personalized narrative observations rather than template-based ones.
 4. **Rate limiting:** Per-tenant rate limiting with sliding window counters.
 
-## Disqualification Risks Mitigated
 
-*   **No Secrets:** No hardcoded API keys exist in the repository.
-*   **100% Passing CI:** The test suite passes locally and utilizes the `MockLLM` fixture to pass in CI without network calls.
-*   **Strict SSE Streaming:** The `/api/v1/query` endpoint returns an `EventSourceResponse`. No JSON fallback path.
-*   **Safety Guard Speed:** Runs synchronously using pre-compiled regex, executing in < 2ms (well under the 10ms requirement).
-*   **Pipeline Timeout:** 30s hard limit via `asyncio.wait_for()` — prevents indefinite hangs.
-*   **Empty Portfolios:** `PortfolioHealthAgent` gracefully detects empty positions and returns BUILD-focused observations instead of crashing.
-*   **Regulatory Disclaimers:** Appended automatically to the `PortfolioHealthResponse`.
-*   **Conversation Handling:** Tests cover follow-up resolution, topic switches, and ambiguous/typo queries from `fixtures/conversations/`.
